@@ -1,44 +1,57 @@
-import socket
-import os
+from scapy.all import sniff
+import subprocess
 
-# Create a raw socket
-def create_socket():
-    try:
-        # AF_PACKET for Linux, AF_INET for Windows with SOCK_RAW and IPPROTO_IP
-        # For Windows, you might need to run the script with administrative privileges
-        if os.name == "nt":
-            s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
-        else:
-            s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.ntohs(0x0003))
-        return s
-    except Exception as e:
-        print("Error creating socket: ", e)
-        return None
 
-# Configure the socket and start sniffing
-def sniff_packets(socket):
-    if os.name == "nt":
-        host = socket.gethostbyname(socket.gethostname())
-        socket.bind((host, 0))
-        socket.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-        socket.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
-
-    try:
-        while True:
-            raw_data, addr = socket.recvfrom(65535)
-            print("Packet received from:", addr)
-            print(raw_data)
-    except KeyboardInterrupt:
-        if os.name == "nt":
-            socket.ioctl(socket.SIO_RCVALL, socket.RCVALL_OFF)
-        print("Stopping packet sniffing")
-
-# Main function to setup the sniffer
 def main():
-    s = create_socket()
-    if s:
-        sniff_packets(s)
+    while (True):
+        display_interfaces()
+        # Specify the interface
+        interface = input(
+            "Select the interface you want to sniff on from the following option: ")
+        # Specify the number of packets to stop sniffing after reaching
+        limit = int(input(
+            "Enter the number of packets to sniff (Enter 0 if you don't wish to sniff a specific number of packets): "))
+        answer = input("Do you wish to filter by a specific protocol? (Y/N) ")
+        if limit == 0:
+            if answer == "Y" or answer == "y":
+                protocol = input("Specify the protocol: ")
+                sniff(filter=protocol, iface=interface, prn=PcktInfo)
+            else:
+                sniff(iface=interface, prn=PcktInfo)
+        else:
+            if answer == "Y" or answer == "y":
+                protocol = input("Specify the protocol: ")
+                sniff(filter=protocol, iface=interface,
+                      prn=PcktInfo, count=limit)
+            else:
+                sniff(iface=interface, prn=PcktInfo, count=limit)
+
+        # The sniff() is used for packet sniffing,
+        # filter=protocol specifies a filter for the packets to capture. It indicates the protocol or types of packets to capture.
+        # iface=interface specifies the interface we want to sniff on (taken as input from the user),
+        # prn=PcktInfo indicates that the function named PcktInfo will be called for each captured packet,
+        # count=limit means that the packet sniffing will stop after capturing limit number of packets (taken as input from the user).
+
+        exit = input("Do you want to exit? (Y/N) ")
+        if exit == "Y" or exit == "y":
+            break
+
+
+def PcktInfo(Packet):  # Callback Function used with sniff()
+    # Display detailed information about a packet including protocol-specific details.
+    print(Packet.show())
+
+
+def display_interfaces():
+    try:
+        # Use 'ipconfig' on Windows to display the available interfaces
+        result = subprocess.run(
+            ['ipconfig'], capture_output=True, text=True, check=True)
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        # Handle errors, if any
+        print(f"Error: {e.stderr}")
+
 
 if __name__ == "__main__":
     main()
-
